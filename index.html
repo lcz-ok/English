@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="LinguaVerse - 沉浸式多语种学习平台，涵盖英语、日语、韩语等主流语言" />
+    <!-- Force HTTPS: redirect HTTP to HTTPS -->
+    <script>
+      (function () {
+        var host = window.location.hostname;
+        // Skip HTTPS redirect for localhost / IP / file protocol
+        if (host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('192.168.') && window.location.protocol === 'http:') {
+          window.location.href = window.location.href.replace(/^http:/, 'https:');
+        }
+      })();
+    </script>
     <title>LinguaVerse · 沉浸式多语种学习平台</title>
   </head>
   <body>
