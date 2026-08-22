@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import type { LangCode, UserStats } from "../data/types";
 import { ACHIEVEMENTS } from "../data/achievements";
 import { COURSES } from "../data/courses";
-import { load, save, remove, STORAGE_KEYS, hashPassword, uid, syncFromCloud } from "../lib/storage";
-import { supabaseEnabled } from "../lib/supabaseClient";
+import { load, save, remove, STORAGE_KEYS, hashPassword, uid } from "../lib/storage";
+import { cloudPullAll } from "../lib/cloudApi";
 import { buildPersonalizedPath } from "../lib/recommend";
 import type { LearningPath } from "../lib/recommend";
 
@@ -96,7 +96,7 @@ function ensureBuiltinAccounts(list: User[]): User[] {
   return ensureGuest(ensureAdmin(list));
 }
 
-interface Progress {
+export interface Progress {
   userId: string;
   completedLessons: string[]; // lesson ids
   xp: number;
@@ -205,22 +205,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => save(STORAGE_KEYS.currentUser, userId), [userId]);
   useEffect(() => save(STORAGE_KEYS.progress, allProgress), [allProgress]);
 
-  // 启动时从云端拉取数据（仅在配置了 Supabase 时执行）
-  // 实现跨设备同步：新设备登录后会从云端拉取最新的用户列表和进度
+  // 启动时从云端拉取用户和进度（跨设备同步核心）
+  // 策略：localStorage 先渲染（秒开），云端返回后做并集合并，云版本优先
   useEffect(() => {
-    if (!supabaseEnabled) return;
+    let cancelled = false;
     (async () => {
-      const [cloudUsers, cloudProgress] = await Promise.all([
-        syncFromCloud<User[]>(STORAGE_KEYS.users),
-        syncFromCloud<Record<string, Progress>>(STORAGE_KEYS.progress),
-      ]);
-      if (cloudUsers) {
-        setUsers(ensureBuiltinAccounts(cloudUsers));
-      }
-      if (cloudProgress) {
-        setAllProgress((prev) => ({ ...prev, ...cloudProgress }));
-      }
+      const remote = await cloudPullAll();
+      if (!remote || cancelled) return;
+      const cloudUsers = Array.isArray(remote.users) ? remote.users : [];
+      const cloudProgress = remote.progress && typeof remote.progress === "object" ? remote.progress : {};
+
+      // --- merge users: union by email; cloud wins on conflict ---
+      setUsers((prevLocal) => {
+        const byEmail = new Map<string, User>();
+        for (const u of prevLocal) byEmail.set(u.email.toLowerCase(), u);
+        for (const u of cloudUsers) {
+          if (!u || !u.email) continue;
+          byEmail.set(u.email.toLowerCase(), u as User);
+        }
+        const merged = Array.from(byEmail.values());
+        return ensureBuiltinAccounts(merged);
+      });
+
+      // --- merge progress: cloud shallow-spread over local per userId ---
+      setAllProgress((prevLocal) => {
+        const next: Record<string, Progress> = { ...prevLocal };
+        for (const [uidKey, p] of Object.entries(cloudProgress)) {
+          if (!p) continue;
+          next[uidKey] = { ...(prevLocal[uidKey] ?? emptyProgress(uidKey)), ...(p as Progress) };
+        }
+        // seed empty progress for built-in accounts if missing
+        if (!next["admin"]) next["admin"] = emptyProgress("admin");
+        if (!next["guest"]) next["guest"] = emptyProgress("guest");
+        return next;
+      });
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const user = useMemo(() => users.find((u) => u.id === userId) ?? null, [users, userId]);

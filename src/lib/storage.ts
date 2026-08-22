@@ -1,7 +1,25 @@
-// Typed storage layer: localStorage + Supabase cloud sync
-// 未配置 Supabase 时自动降级为纯 localStorage 单机模式
+// Typed storage layer: localStorage + Vercel cloud sync (via /api endpoints).
+// If cloud is unreachable or not yet wired, application continues to work
+// locally exactly as it did before — just no cross-device sync yet.
 
-import { cloudGet, cloudSet, supabaseEnabled } from "./supabaseClient";
+import { cloudPushKey } from "./cloudApi";
+
+// localStorage keys. Prefixed "lv." to avoid collisions with other apps on
+// the same origin — and intentionally kept stable so APK builds and earlier
+// browser sessions retain their user/progress data.
+export const STORAGE_KEYS = {
+  users: "lv.users",
+  currentUser: "lv.currentUser",
+  progress: "lv.progress",
+  posts: "lv.posts",
+  remember: "lv.remember",
+} as const;
+
+// Map a localStorage key (e.g. "lv.users") → the canonical cloud-store key.
+// The server adds its own "lv:" KV namespace prefix, so strip ours here.
+function cloudKey(localKey: string): string {
+  return localKey.replace(/^lv\./, "");
+}
 
 // 同步读取（localStorage 优先，立即返回；云端在 AppContext 启动时单独拉取）
 export function load<T>(key: string, fallback: T): T {
@@ -21,10 +39,8 @@ export function save<T>(key: string, value: T): void {
   } catch {
     // ignore quota errors
   }
-  // 后台异步推送到云端（不阻塞 UI）
-  if (supabaseEnabled) {
-    void cloudSet("users", key, value).catch(() => {});
-  }
+  // 后台异步推送到云端（不阻塞 UI，失败静默）
+  void cloudPushKey(cloudKey(key), value).catch(() => {});
 }
 
 export function remove(key: string): void {
@@ -35,30 +51,13 @@ export function remove(key: string): void {
   }
 }
 
-export const STORAGE_KEYS = {
-  users: "lv.users",
-  currentUser: "lv.currentUser",
-  progress: "lv.progress", // progress keyed by userId
-  posts: "lv.posts",
-  remember: "lv.remember", // 7-day auto-login entry { userId, expiresAt }
-} as const;
-
-// 从云端拉取数据并合并到本地（启动时调用）
-export async function syncFromCloud<T>(key: string): Promise<T | null> {
-  if (!supabaseEnabled) return null;
-  const cloudData = await cloudGet<T>("users", key);
-  if (cloudData) {
-    try {
-      localStorage.setItem(key, JSON.stringify(cloudData));
-    } catch {
-      // ignore
-    }
-    return cloudData;
-  }
+// 兼容旧版 — 现在 AppContext 直接用 cloudPullAll()
+export async function syncFromCloud<T>(_key: string): Promise<T | null> {
   return null;
 }
 
-// Simple hash (NOT secure - demo only) to avoid storing raw passwords
+// Simple hash (NOT secure - demo only) to avoid storing raw passwords.
+// Kept byte-for-byte identical with api/sync.ts so hashes match server-side.
 export function hashPassword(pw: string): string {
   let h = 0;
   for (let i = 0; i < pw.length; i++) {

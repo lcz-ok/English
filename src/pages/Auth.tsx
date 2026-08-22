@@ -119,7 +119,7 @@ export function Login() {
           保存密码（7 天免登录）
         </label>
         <button type="submit" className="btn-primary w-full py-3">登录</button>
-        <p className="text-center text-xs text-slate-500">提示：本平台为演示应用，数据保存在你的浏览器本地。</p>
+        <p className="text-center text-xs text-slate-500">平台数据自动在云端加密保存，支持手机和电脑跨设备同步登录。</p>
       </form>
     </AuthShell>
   );
