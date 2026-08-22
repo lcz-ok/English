@@ -8,16 +8,31 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/:path*" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
       ]
     }
   ],
@@ -25,5 +40,16 @@
     "api/*.ts": {
       "runtime": "@vercel/node@4"
     }
+  },
+  "_docs_domains": {
+    "note": "生产部署后在 Vercel 面板 → Domains 添加 https://www.lgg.com，并按提示把域名的 CNAME 指向 cname.vercel-dns.com",
+    "vercel_domains_to_add": [
+      "www.lgg.com",
+      "lgg.com"
+    ],
+    "if_you_do_not_own_lgg.com_use_free_domain_instead": [
+      "https://linguaverse-lcz.vercel.app",
+      "https://lcz-ok.github.io/English"
+    ]
   }
 }
