@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import type { LangCode, UserStats } from "../data/types";
 import { ACHIEVEMENTS } from "../data/achievements";
 import { COURSES } from "../data/courses";
-import { load, save, remove, STORAGE_KEYS, hashPassword, uid } from "../lib/storage";
+import { load, save, remove, STORAGE_KEYS, hashPassword, uid, syncFromCloud } from "../lib/storage";
+import { supabaseEnabled } from "../lib/supabaseClient";
 import { buildPersonalizedPath } from "../lib/recommend";
 import type { LearningPath } from "../lib/recommend";
 
@@ -203,6 +204,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => save(STORAGE_KEYS.users, users), [users]);
   useEffect(() => save(STORAGE_KEYS.currentUser, userId), [userId]);
   useEffect(() => save(STORAGE_KEYS.progress, allProgress), [allProgress]);
+
+  // 启动时从云端拉取数据（仅在配置了 Supabase 时执行）
+  // 实现跨设备同步：新设备登录后会从云端拉取最新的用户列表和进度
+  useEffect(() => {
+    if (!supabaseEnabled) return;
+    (async () => {
+      const [cloudUsers, cloudProgress] = await Promise.all([
+        syncFromCloud<User[]>(STORAGE_KEYS.users),
+        syncFromCloud<Record<string, Progress>>(STORAGE_KEYS.progress),
+      ]);
+      if (cloudUsers) {
+        setUsers(ensureBuiltinAccounts(cloudUsers));
+      }
+      if (cloudProgress) {
+        setAllProgress((prev) => ({ ...prev, ...cloudProgress }));
+      }
+    })();
+  }, []);
 
   const user = useMemo(() => users.find((u) => u.id === userId) ?? null, [users, userId]);
   const progress = useMemo(() => (userId ? allProgress[userId] ?? null : null), [allProgress, userId]);

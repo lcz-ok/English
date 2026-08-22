@@ -1,5 +1,9 @@
-// Tiny typed localStorage wrapper with JSON serialization
+// Typed storage layer: localStorage + Supabase cloud sync
+// 未配置 Supabase 时自动降级为纯 localStorage 单机模式
 
+import { cloudGet, cloudSet, supabaseEnabled } from "./supabaseClient";
+
+// 同步读取（localStorage 优先，立即返回；云端在 AppContext 启动时单独拉取）
 export function load<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -10,11 +14,16 @@ export function load<T>(key: string, fallback: T): T {
   }
 }
 
+// 同步保存到 localStorage，并 fire-and-forget 同步到云端
 export function save<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
     // ignore quota errors
+  }
+  // 后台异步推送到云端（不阻塞 UI）
+  if (supabaseEnabled) {
+    void cloudSet("users", key, value).catch(() => {});
   }
 }
 
@@ -33,6 +42,21 @@ export const STORAGE_KEYS = {
   posts: "lv.posts",
   remember: "lv.remember", // 7-day auto-login entry { userId, expiresAt }
 } as const;
+
+// 从云端拉取数据并合并到本地（启动时调用）
+export async function syncFromCloud<T>(key: string): Promise<T | null> {
+  if (!supabaseEnabled) return null;
+  const cloudData = await cloudGet<T>("users", key);
+  if (cloudData) {
+    try {
+      localStorage.setItem(key, JSON.stringify(cloudData));
+    } catch {
+      // ignore
+    }
+    return cloudData;
+  }
+  return null;
+}
 
 // Simple hash (NOT secure - demo only) to avoid storing raw passwords
 export function hashPassword(pw: string): string {
