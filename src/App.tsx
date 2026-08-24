@@ -14,6 +14,13 @@ import { LearningPathPage } from "./pages/LearningPath";
 import { AdminUsers } from "./pages/AdminUsers";
 import type { ReactNode } from "react";
 
+/**
+ * Runtime router basename. Works on any host (root domain OR GitHub Pages
+ * sub-path) automatically by reading <base href="…"> that Vite injects at
+ * build time from the `base` / `VITE_BASE` config.
+ */
+const BASENAME = (import.meta.env.BASE_URL || "/").replace(/\/$/, "") || "/";
+
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, logout } = useApp();
   // Not logged in -> go to login
@@ -36,7 +43,7 @@ function RequireAdmin({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <AppProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={BASENAME}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
