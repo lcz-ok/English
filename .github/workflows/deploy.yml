@@ -46,6 +46,9 @@ jobs:
       - name: SPA fallback for deep links
         run: cp dist/index.html dist/404.html
 
+      - name: Custom domain file
+        run: echo "lgg.de5.net" > dist/CNAME
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
